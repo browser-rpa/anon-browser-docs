@@ -1,0 +1,267 @@
+openapi: 3.1.0
+info:
+  title: anon-browser Desktop Client Local API
+  version: 0.1.0
+  description: >-
+    Public API exposed by the locally installed anon-browser desktop client.
+    This contract is intentionally limited to the local loopback API and does
+    not describe server deployment, remote execution, or internal services.
+servers:
+  - url: http://127.0.0.1:8787
+    description: Local loopback API exposed by the desktop client
+x-client-only: true
+paths:
+  /healthz:
+    get:
+      security: []
+      summary: Health check
+      responses:
+        '200':
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /readyz:
+    get:
+      security: []
+      summary: Readiness check
+      responses:
+        '200': { description: Ready }
+        '503': { description: Not ready }
+  /api/profiles:
+    get:
+      summary: List browser Profiles
+      responses:
+        '200':
+          description: Profile list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Profile' }
+    post:
+      summary: Create a browser Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfileInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+  /api/runtimes:
+    get:
+      summary: List running browser runtimes
+      responses:
+        '200':
+          description: Runtime list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Runtime' }
+  /api/rpa/node-catalog:
+    get:
+      summary: Get built-in and installed plugin nodes
+      responses:
+        '200':
+          description: Node catalog
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NodeCatalog' }
+  /api/rpa/workflows:
+    get:
+      summary: List workflows
+      parameters:
+        - { $ref: '#/components/parameters/ProjectID' }
+      responses:
+        '200': { description: Workflow list }
+    post:
+      summary: Create a workflow
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkflowInput' }
+      responses:
+        '201': { description: Created }
+  /api/rpa/workflows/{workflow_id}/publish:
+    post:
+      summary: Validate and publish a workflow version
+      parameters:
+        - { $ref: '#/components/parameters/WorkflowID' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project_id, expected_workflow_revision, expected_version_revision, expected_settings_revision]
+              properties:
+                project_id: { type: string }
+                expected_workflow_revision: { type: integer, format: int64 }
+                expected_version_revision: { type: integer, format: int64 }
+                expected_settings_revision: { type: integer, format: int64 }
+                catalog_revision: { type: integer, format: int64 }
+      responses:
+        '200': { description: Published immutable version }
+        '409': { description: Revision conflict }
+        '422': { description: Graph validation failed }
+  /api/rpa/workflows/{workflow_id}/runs:
+    post:
+      summary: Create a workflow Run
+      parameters:
+        - { $ref: '#/components/parameters/WorkflowID' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                project_id: { type: string, default: local }
+                workflow_version_id: { type: string }
+                input: { type: object, additionalProperties: true }
+                profile_binding: { type: object, additionalProperties: true }
+                debug: { type: boolean, default: false }
+      responses:
+        '201': { description: Run created }
+  /api/plugins:
+    get:
+      summary: List installed plugin summaries
+      responses:
+        '200':
+          description: Plugin list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PluginSummary' }
+  /api/plugins/automation/import:
+    post:
+      summary: Import an application-level automation plugin
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary, description: .abp or .zip package }
+      responses:
+        '201':
+          description: Installed plugin summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PluginSummary' }
+  /api/plugins/automation/{plugin_id}:
+    delete:
+      summary: Remove an automation plugin
+      parameters:
+        - { $ref: '#/components/parameters/PluginID' }
+      responses:
+        '204': { description: Removed }
+  /api/extensions/import/local:
+    post:
+      summary: Import a browser extension into a Profile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [profile_id, paths, files]
+              properties:
+                profile_id: { type: string }
+                paths: { type: array, items: { type: string } }
+                files: { type: array, items: { type: string, format: binary } }
+      responses:
+        '201': { description: Installed browser extension }
+components:
+  parameters:
+    ProjectID:
+      name: project_id
+      in: query
+      schema: { type: string, default: local }
+    WorkflowID:
+      name: workflow_id
+      in: path
+      required: true
+      schema: { type: string }
+    PluginID:
+      name: plugin_id
+      in: path
+      required: true
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 200 }
+  schemas:
+    Health:
+      type: object
+      properties:
+        status: { type: string }
+        service: { type: string }
+    Profile:
+      type: object
+      required: [id, name, platform, browser_family, browser_version, revision]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        platform: { type: string }
+        browser_family: { type: string }
+        browser_version: { type: string }
+        revision: { type: integer, format: int64 }
+    ProfileInput:
+      type: object
+      required: [name, platform, identity_template, browser_family, browser_version, languages, timezone, proxy_mode, window_width, window_height]
+      properties:
+        project_id: { type: string, default: local }
+        name: { type: string }
+        platform: { type: string, enum: [mac, windows, android, ios, webkit] }
+        identity_template: { type: string }
+        browser_family: { type: string, default: chrome }
+        browser_version: { type: string }
+        languages: { type: array, items: { type: string } }
+        timezone: { type: string }
+        proxy_mode: { type: string }
+        window_width: { type: integer, minimum: 320 }
+        window_height: { type: integer, minimum: 240 }
+    Runtime:
+      type: object
+      properties:
+        profile_id: { type: string }
+        state: { type: string }
+        browser_version: { type: string }
+    PluginSummary:
+      type: object
+      required: [id, name, version, kind]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        version: { type: string }
+        kind: { type: string, enum: [browser-extension, automation] }
+        profile_id: { type: string }
+        permissions: { type: array, items: { type: string } }
+        nodes: { type: array, items: { type: object } }
+    NodeCatalog:
+      type: object
+      additionalProperties: true
+    WorkflowInput:
+      type: object
+      required: [project_id, name, graph]
+      properties:
+        project_id: { type: string, default: local }
+        name: { type: string }
+        description: { type: string }
+        graph: { type: object, additionalProperties: true }
