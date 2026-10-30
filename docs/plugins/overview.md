@@ -16,18 +16,18 @@ manifest.json + node schema
             ↓ 工作流运行
        Plugin Host
             ↓ capability.call
-      Core 能力边界
+      宿主授权能力
 ```
 
 ## 开发闭环
 
 1. 为插件分配稳定 ID，例如 `acme.invoice`。
-2. 编写 `manifest.json` 和一个或多个 Node Descriptor。
-3. 实现入口程序，读取 stdin 的 JSON 请求并向 stdout 返回 JSON 结果。
+2. 使用 [Go SDK](go-sdk.md) 在 Go 中声明 Manifest 和 Node Descriptor，并生成 `manifest.json`。
+3. 注册节点 handler，SDK 负责 stdin/stdout 协议和 capability 往返；不再手写公共类型。
 4. 在节点 Policy 中声明最小权限、超时、资源和错误码。
 5. 使用示例仓库的打包脚本生成 `.abp` 或 `.zip`。
 6. 在桌面扩展中心导入，或通过 `/api/plugins/automation/import` 上传。
-7. 重新读取 Node Catalog，在 RPA 编辑器中拖入节点。
+7. 安装/升级后重启客户端，使启动时注册的 Node Catalog 更新，再拖入节点。
 
 ## 什么时候使用插件
 
@@ -37,7 +37,9 @@ manifest.json + node schema
 
 ## 当前限制
 
-- 插件运行在 Core 启动的受控子进程中。
-- 一个节点调用的输入和输出默认限制为 1 MiB 级别，并受输出数量限制。
+- 插件运行在客户端启动的受控子进程中。
+- 一个节点调用输入最大 1 MiB，默认累计 stdout 最大 4 MiB，最多 64 次 capability 调用；输出、变量及产物引用各最多 256 项。
 - 插件不能自行修改工作流、创建 Run 或读取其他 Profile。
 - 签名发布和远程插件市场尚未作为公开稳定能力；本地导入适合开发测试。
+
+SDK 的 [workflow 包](workflow-authoring.md) 可以生成包含内置节点的工作流；它与运行中的插件 capability 是两种不同用途。新增会话、事件、文件和持久等待能力应按工作流/API 编排，不表示插件可直接调用所有内置节点。

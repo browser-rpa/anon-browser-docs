@@ -9,7 +9,7 @@ sidebar_position: 4
 
 ## 节点调用
 
-Core 启动入口程序后发送一行：
+宿主启动入口程序后发送一行：
 
 ```json
 {
@@ -80,34 +80,12 @@ Host 返回：
 }
 ```
 
-然后插件继续发送最终的 `ok/result` 消息。Host 会限制调用次数、消息大小、超时和输出数量；插件不能自行访问 CDP 或 Core 数据库。
+然后插件继续发送最终的 `ok/result` 消息。Host 会限制调用次数、消息大小、超时和输出数量；浏览器和数据操作应使用已授权的 capability 调用。
 
-## Go 最小调用示例
+## Go 开发入口
 
-插件程序可以使用标准库的 `encoding/json` 发送和读取 JSON 行：
+使用公开 [Go SDK](go-sdk.md) 的 `Server` 和类型化 Client，不再复制协议结构体或手动处理 ID。上述 JSON 用于说明跨语言协议，不是推荐的 Go 业务编写方式。
 
-```go
-encoder := json.NewEncoder(os.Stdout)
-decoder := json.NewDecoder(os.Stdin)
+当前每个进程只处理一次 invocation：返回最终结果后退出，不等待第二次调用。尚未提供 initialize/health/shutdown 握手或常驻插件进程。输入限制为 1 MiB，默认累计 stdout 上限 4 MiB，最多 64 次 capability 调用；输出、变量和产物引用分别最多 256 项。宿主负责运行超时与取消。
 
-_ = encoder.Encode(map[string]any{
-    "type": "capability_call",
-    "id": "call-1",
-    "capability": "browser",
-    "action": "read_title",
-    "arguments": map[string]any{},
-})
-
-var response struct {
-    Type string `json:"type"`
-    ID   string `json:"id"`
-    OK   bool   `json:"ok"`
-    Data any    `json:"data"`
-}
-if err := decoder.Decode(&response); err != nil {
-    // capability 通道异常，返回节点失败
-}
-```
-
-可运行的完整 Go 示例见公开仓库的
-[`plugins/capability-node`](https://github.com/browser-rpa/anon-browser-examples/tree/main/plugins/capability-node)。
+可运行的完整 Go 示例见公开仓库的 [plugins/capability-node](https://github.com/browser-rpa/anon-browser-examples/tree/main/plugins/capability-node)。

@@ -27,9 +27,11 @@ sidebar_position: 3
       "additionalProperties": false,
       "properties": {
         "selector": {
-          "type": "string",
           "title": "内容选择器",
-          "x-allow-variable-ref": true
+          "oneOf": [
+            { "type": "string" },
+            { "type": "object", "required": ["variable_ref"], "additionalProperties": false, "properties": { "variable_ref": { "type": "string" } } }
+          ]
         }
       },
       "required": ["selector"]
@@ -50,7 +52,7 @@ sidebar_position: 3
   "policy": {
     "capabilities": ["browser.read"],
     "required_permissions": ["browser.read"],
-    "timeouts": { "default": "10s", "minimum": "100ms", "maximum": "60s" },
+    "timeouts": { "default": 10000000000, "minimum": 100000000, "maximum": 60000000000 },
     "resources": { "profile_lease": true, "runtime": true, "active_page": true },
     "max_attempts": 1
   }
@@ -60,8 +62,15 @@ sidebar_position: 3
 ## 设计规则
 
 - `metadata.type + metadata.version` 是不可变节点身份。
-- 节点只能使用 Manifest 已声明的权限。
+- 节点类型使用自己的小写命名空间，不能占用 `core`、`browser` 等内置命名空间。
+- 节点只能使用 Manifest 与自身 `policy.required_permissions` 共同声明的权限。
 - 输入、输出和事件应使用结构化 JSON，不要把多个字段拼成不可解析字符串。
-- 需要引用工作流变量的字段可使用 `x-allow-variable-ref: true`。
+- 需要引用变量的字段应在 Schema 中显式允许 `variable_ref` 对象；UI 提示本身不改变字段类型。
+- JSON 中 `time.Duration` 使用纳秒数；Go SDK 可以直接写 `10*time.Second`。不要在 Manifest 的 timeout 字段填写 `"10s"`。
+- `safe` 节点不得声明受限权限；带权限的节点使用 `sensitive` 或 `high_risk`，并通过运行授权。
+- `network.fetch`、`browser.script`、`network.modify` 权限要求 `high_risk`。
+- 返回变量或产物引用分别需要 `variables.write`、`run.artifacts.write`，即使没有发起 capability 调用也一样。
 - `policy` 应保守声明资源和超时；过大的权限会增加审批成本。
 - 新增不兼容字段或修改端口语义时递增节点版本。
+
+推荐在 Go 中用 `sdk.Describe` 和 Schema helper 生成以上结构，详见 [Go SDK](go-sdk.md)。
